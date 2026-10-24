@@ -4,7 +4,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-from src import config
+from src import config, example_store
 
 llm = ChatOpenAI(
     model=config.LLM_MODEL,
@@ -29,12 +29,25 @@ Rules:
 - Use single quotes for text values.
 - Return only the SQL query, with no explanation and no markdown.
 
+Solved examples of similar requests. They use a different schema, so only follow their query pattern and adapt the table and column names to the schema below:
+{examples}
+
 Database schema:
 {schema}"""),
     ("human", "{question}"),
 ])
 
 chain = prompt | llm | StrOutputParser()
+
+
+def get_examples_text(question):
+    try:
+        found = example_store.find_examples(question)
+    except Exception:
+        return "No examples available."
+    return "\n".join(
+        "Request: " + item["question"] + "\nSQL: " + item["sql"] for item in found
+    )
 
 
 def clean_sql(text):
@@ -57,5 +70,9 @@ def generate_sql(question, schema, previous_sql=None, error=None):
             + "\nError: " + str(error)
             + "\nWrite a corrected query."
         )
-    output = chain.invoke({"question": request, "schema": schema})
+    output = chain.invoke({
+        "question": request,
+        "schema": schema,
+        "examples": get_examples_text(question),
+    })
     return clean_sql(output)

@@ -7,3 +7,5 @@ langchain
 langchain-openai
 python-dotenv
 av<17
+chromadb
+fastembed

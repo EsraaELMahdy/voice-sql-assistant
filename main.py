@@ -6,13 +6,14 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from src import config, database, explain, sql_generator, stt
+from src import config, database, example_store, explain, sql_generator, stt
 from src.sql_validator import UnsafeSQLError, validate_sql
 
 app = FastAPI(title="Voice SQL Assistant")
 
 config.UPLOAD_DIR.mkdir(exist_ok=True)
 stt.get_model()
+example_store.get_collection()
 
 ARABIC_WORDS = "اعرض، احسب، إجمالي، متوسط، أكبر، أقل، عدد، المجموع، لكل"
 ENGLISH_WORDS = "show, total, average, maximum, minimum, count, sum, per, by, top"

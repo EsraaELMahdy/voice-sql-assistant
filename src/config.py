@@ -22,3 +22,6 @@ MAX_ROWS = 100
 WHISPER_BEAM_SIZE = 1
 
 
+
+EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+TOP_K_EXAMPLES = 3
