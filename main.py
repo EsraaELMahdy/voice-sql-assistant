@@ -37,6 +37,9 @@ def save_upload(file):
 
 def build_stt_prompt(language):
     columns = ", ".join(name.replace("_", " ") for name in database.get_columns())
+    values = ", ".join(database.get_text_values())
+    if values:
+        columns = columns + ", " + values
     if language == "ar":
         return ARABIC_WORDS + "، " + columns
     if language == "en":

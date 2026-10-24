@@ -98,3 +98,20 @@ def run_query(sql):
         columns = [item[0] for item in cursor.description]
         rows = [list(row) for row in cursor.fetchmany(config.MAX_ROWS)]
     return {"columns": columns, "rows": rows}
+
+
+def get_text_values(max_values=15):
+    values = []
+    with sqlite3.connect(config.DB_PATH.as_uri() + "?mode=ro", uri=True) as connection:
+        table = get_table(connection)
+        if not table:
+            return values
+        for _, name, kind, *_ in connection.execute('PRAGMA table_info("' + table + '")'):
+            if kind.upper() != "TEXT":
+                continue
+            rows = connection.execute(
+                'SELECT DISTINCT "' + name + '" FROM "' + table + '" LIMIT ' + str(max_values + 1)
+            ).fetchall()
+            if len(rows) <= max_values:
+                values += [str(row[0]) for row in rows if row[0] is not None]
+    return values
