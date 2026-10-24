@@ -14,7 +14,7 @@ app = FastAPI(title="Voice SQL Assistant")
 config.UPLOAD_DIR.mkdir(exist_ok=True)
 stt.get_model()
 
-ARABIC_WORDS = "????? ????? ??????? ?????? ????? ???? ???? ???????? ???"
+ARABIC_WORDS = "اعرض، احسب، إجمالي، متوسط، أكبر، أقل، عدد، المجموع، لكل"
 ENGLISH_WORDS = "show, total, average, maximum, minimum, count, sum, per, by, top"
 
 
@@ -36,7 +36,7 @@ def save_upload(file):
 def build_stt_prompt(language):
     columns = ", ".join(name.replace("_", " ") for name in database.get_columns())
     if language == "ar":
-        return ARABIC_WORDS + "? " + columns
+        return ARABIC_WORDS + "، " + columns
     if language == "en":
         return ENGLISH_WORDS + ", " + columns
     return columns
@@ -151,16 +151,16 @@ def text_query(request: QuestionRequest):
 def voice_query(audio: UploadFile = File(...), language: str = Form("auto")):
     heard = speech_to_text(audio, language)
     if not heard["text"]:
-        raise HTTPException(status_code=400, detail="I could not hear any speech. Please try again and speak a little closer to the microphone.")
+        raise HTTPException(
+            status_code=400,
+            detail="I could not hear any speech. Please try again and speak a little closer to the microphone.",
+        )
     response = answer(heard["text"])
     response["transcript"] = heard["text"]
     response["language"] = heard["language"]
     return response
 
 
-
 @app.get("/app")
 def web_app():
     return FileResponse(config.ROOT / "static" / "index.html")
-
-

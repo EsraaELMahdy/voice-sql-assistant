@@ -31,7 +31,7 @@ Rules:
 Examples (for a different schema: employees with name, department, salary):
 Request: average salary per department
 SQL: SELECT department, AVG(salary) AS avg_salary FROM employees GROUP BY department
-Request: ???? ???? 3 ?????? ?? ??? ??????
+Request: اعرض اعلى 3 موظفين من حيث الراتب
 SQL: SELECT name, salary FROM employees ORDER BY salary DESC LIMIT 3
 
 Database schema:
@@ -55,4 +55,3 @@ def clean_sql(text):
 def generate_sql(question, schema):
     output = chain.invoke({"question": question, "schema": schema})
     return clean_sql(output)
-
