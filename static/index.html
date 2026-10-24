@@ -1,0 +1,190 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice SQL Assistant</title>
+<style>
+  body { font-family: Segoe UI, Arial, sans-serif; background: #f4f6f8; color: #1f2933; margin: 0; }
+  main { max-width: 820px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { margin-bottom: 4px; }
+  .sub { color: #52606d; margin-top: 0; }
+  section { background: #fff; border-radius: 10px; padding: 16px 20px; margin-top: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  h2 { font-size: 1.05rem; margin-top: 0; }
+  button { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; font-size: 1rem; cursor: pointer; }
+  button.on { background: #dc2626; }
+  input[type=text] { padding: 8px; width: 60%; border: 1px solid #cbd2d9; border-radius: 6px; font-size: 1rem; }
+  select { padding: 6px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  #status { color: #52606d; }
+  pre { background: #f0f2f5; padding: 10px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  th, td { border: 1px solid #d9dee3; padding: 6px 10px; text-align: left; }
+  th { background: #eef1f4; }
+  .label { font-weight: 600; margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Voice SQL Assistant</h1>
+  <p class="sub">Ask a question about your data with your voice. No SQL needed.</p>
+
+  <section>
+    <h2>1. Data</h2>
+    <div class="row">
+      <input type="file" id="csv" accept=".csv">
+      <button id="uploadBtn">Upload CSV</button>
+    </div>
+    <pre id="schema">Loading...</pre>
+  </section>
+
+  <section>
+    <h2>2. Ask</h2>
+    <div class="row">
+      <label>Language
+        <select id="lang">
+          <option value="auto">Auto</option>
+          <option value="ar">Arabic</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <button id="rec">Start recording</button>
+      <span id="status"></span>
+    </div>
+    <div class="row">
+      <input type="text" id="text" placeholder="Or type your question here">
+      <button id="send">Ask</button>
+    </div>
+  </section>
+
+  <section id="out" hidden>
+    <h2>3. Result</h2>
+    <div class="label">What I heard</div>
+    <div id="transcript" dir="auto"></div>
+    <div class="label">Generated SQL</div>
+    <pre id="sql"></pre>
+    <div class="label">Explanation</div>
+    <div id="explanation" dir="auto"></div>
+    <div class="label">Data</div>
+    <div id="table"></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let recorder = null;
+let chunks = [];
+
+function setStatus(message) {
+  $('status').textContent = message;
+}
+
+function errorText(data) {
+  const detail = data.detail;
+  if (typeof detail === 'string') return detail;
+  if (detail && detail.message) return detail.message + (detail.sql ? ' | ' + detail.sql : '');
+  return JSON.stringify(data);
+}
+
+async function loadSchema() {
+  try {
+    const response = await fetch('/schema');
+    const data = await response.json();
+    $('schema').textContent = typeof data.schema === 'string' ? data.schema : JSON.stringify(data.schema, null, 2);
+  } catch (error) {
+    $('schema').textContent = 'No data loaded yet.';
+  }
+}
+
+$('uploadBtn').onclick = async () => {
+  const file = $('csv').files[0];
+  if (!file) return setStatus('Choose a CSV file first.');
+  const form = new FormData();
+  form.append('file', file);
+  setStatus('Uploading...');
+  const response = await fetch('/upload-data', { method: 'POST', body: form });
+  const data = await response.json();
+  if (!response.ok) return setStatus(errorText(data));
+  setStatus('Data loaded.');
+  loadSchema();
+};
+
+async function run(url, options) {
+  try {
+    const response = await fetch(url, options);
+    const data = await response.json();
+    if (!response.ok) return setStatus(errorText(data));
+    show(data);
+    setStatus('Done.');
+  } catch (error) {
+    setStatus('Request failed: ' + error);
+  }
+}
+
+function show(data) {
+  $('out').hidden = false;
+  $('transcript').textContent = data.transcript || data.question;
+  $('sql').textContent = data.sql;
+  $('explanation').textContent = data.explanation || '';
+  const table = document.createElement('table');
+  const head = table.insertRow();
+  data.columns.forEach((name) => {
+    const cell = document.createElement('th');
+    cell.textContent = name;
+    head.appendChild(cell);
+  });
+  data.rows.forEach((row) => {
+    const tr = table.insertRow();
+    row.forEach((value) => {
+      tr.insertCell().textContent = value === null ? '' : value;
+    });
+  });
+  $('table').replaceChildren(table);
+}
+
+$('rec').onclick = async () => {
+  if (recorder && recorder.state === 'recording') {
+    recorder.stop();
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (error) {
+    return setStatus('Microphone access was denied.');
+  }
+  chunks = [];
+  recorder = new MediaRecorder(stream);
+  recorder.ondataavailable = (event) => chunks.push(event.data);
+  recorder.onstop = async () => {
+    stream.getTracks().forEach((track) => track.stop());
+    $('rec').textContent = 'Start recording';
+    $('rec').classList.remove('on');
+    const blob = new Blob(chunks, { type: recorder.mimeType });
+    const form = new FormData();
+    form.append('audio', blob, blob.type.includes('ogg') ? 'voice.ogg' : 'voice.webm');
+    form.append('language', $('lang').value);
+    setStatus('Processing...');
+    await run('/voice-query', { method: 'POST', body: form });
+  };
+  recorder.start();
+  $('rec').textContent = 'Stop';
+  $('rec').classList.add('on');
+  setStatus('Recording... press Stop when you finish.');
+};
+
+$('send').onclick = async () => {
+  const question = $('text').value.trim();
+  if (!question) return;
+  setStatus('Processing...');
+  await run('/text-query', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question: question }),
+  });
+};
+
+loadSchema();
+</script>
+</body>
+</html>

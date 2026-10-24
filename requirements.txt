@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+faster-whisper
+pandas
+langchain
+langchain-openai
+python-dotenv
+av<17
