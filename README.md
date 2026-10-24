@@ -4,6 +4,10 @@ A small web service that lets you ask questions about a CSV file with your voice
 
 ## How it works
 
+~~~
+voice -> Faster-Whisper -> text -> LLM -> SQL -> validator -> SQLite -> table + explanation
+~~~
+
 1. **Speech to text.** Faster-Whisper (`small`, CPU, int8) transcribes the recording. The prompt given to Whisper contains common analysis words and the column names of the loaded table, which helps it hear them correctly.
 2. **SQL generation.** The language model receives the question and the database schema only. It never sees the rows. The schema lists the table, the columns with their types, the possible values of short text columns, and three sample rows.
 3. **Validation.** Only a single `SELECT` (or `WITH`) statement is accepted. Comments, multiple statements and words such as `DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, `CREATE` and `PRAGMA` are rejected.
@@ -12,15 +16,45 @@ A small web service that lets you ask questions about a CSV file with your voice
 
 ## Project structure
 
+~~~
+main.py              FastAPI app and all endpoints
+static/index.html    simple web page with recording button
+src/config.py        settings (models, paths, limits)
+src/stt.py           speech to text
+src/sql_generator.py question to SQL
+src/sql_validator.py SQL safety checks
+src/database.py      CSV loading, schema, query execution
+src/explain.py       explanation of the result
+humaneval.csv        sample data
+test_validator.py    tests for the validator
+test_explain.py      test for the explanation
+~~~
+
 ## Setup
 
 Requires Python 3.13 (tested on Windows).
 
+~~~
+git clone https://github.com/EsraaELMahdy/voice-sql-assistant.git
+cd voice-sql-assistant
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+~~~
+
 Create a file named `app.env` in the project folder:
+
+~~~
+OPENROUTER_API_KEY=your_key_here
+~~~
 
 The file is listed in `.gitignore` and is never committed.
 
 ## Run
+
+~~~
+python -m uvicorn main:app --reload
+~~~
 
 Then open:
 
