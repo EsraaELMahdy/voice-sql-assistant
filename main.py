@@ -16,6 +16,7 @@ stt.get_model()
 
 ARABIC_WORDS = "اعرض، احسب، إجمالي، متوسط، أكبر، أقل، عدد، المجموع، لكل"
 ENGLISH_WORDS = "show, total, average, maximum, minimum, count, sum, per, by, top"
+MAX_ATTEMPTS = 3
 
 
 class QuestionRequest(BaseModel):
@@ -59,40 +60,59 @@ def speech_to_text(file, language):
         path.unlink(missing_ok=True)
 
 
-def make_sql(question):
+def make_sql(question, previous_sql=None, error=None):
     try:
-        sql = sql_generator.generate_sql(question, database.get_schema())
-    except Exception as error:
-        raise HTTPException(status_code=502, detail="The language model failed: " + str(error))
+        sql = sql_generator.generate_sql(question, database.get_schema(), previous_sql, error)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="The language model failed: " + str(exc))
     try:
         return validate_sql(sql)
-    except UnsafeSQLError as error:
-        raise HTTPException(status_code=400, detail={"message": str(error), "sql": sql})
+    except UnsafeSQLError as exc:
+        raise HTTPException(status_code=400, detail={"message": str(exc), "sql": sql})
 
 
 def execute(sql):
     sql = validate_sql_or_400(sql)
     try:
         return database.run_query(sql)
-    except sqlite3.Error as error:
-        raise HTTPException(status_code=400, detail={"message": str(error), "sql": sql})
+    except sqlite3.Error as exc:
+        raise HTTPException(status_code=400, detail={"message": str(exc), "sql": sql})
 
 
 def validate_sql_or_400(sql):
     try:
         return validate_sql(sql)
-    except UnsafeSQLError as error:
-        raise HTTPException(status_code=400, detail={"message": str(error), "sql": sql})
+    except UnsafeSQLError as exc:
+        raise HTTPException(status_code=400, detail={"message": str(exc), "sql": sql})
+
+
+def make_and_run(question):
+    previous_sql = None
+    error_text = None
+    for attempt in range(MAX_ATTEMPTS):
+        try:
+            sql = make_sql(question, previous_sql, error_text)
+            return sql, execute(sql)
+        except HTTPException as exc:
+            if attempt == MAX_ATTEMPTS - 1 or exc.status_code == 502:
+                raise
+            detail = exc.detail
+            if isinstance(detail, dict):
+                previous_sql = detail.get("sql")
+                error_text = detail.get("message")
+            else:
+                previous_sql = None
+                error_text = str(detail)
 
 
 def answer(question):
-    sql = make_sql(question)
-    result = execute(sql)
+    sql, result = make_and_run(question)
     try:
         explanation = explain.explain_result(question, sql, result)
     except Exception:
         explanation = None
     return {
+        "route": "data",
         "question": question,
         "sql": sql,
         "columns": result["columns"],
@@ -115,8 +135,8 @@ def upload_data(file: UploadFile = File(...)):
     path.write_bytes(file.file.read())
     try:
         database.load_csv(path)
-    except Exception as error:
-        raise HTTPException(status_code=400, detail="Could not read the CSV: " + str(error))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Could not read the CSV: " + str(exc))
     return {"message": "Data loaded.", "schema": database.get_schema()}
 
 

@@ -26,13 +26,8 @@ Rules:
 - If a value must be calculated from several columns, calculate it inside the query.
 - Use clear English aliases for calculated columns.
 - Compare text values case-insensitively, for example: WHERE city = 'Austin' COLLATE NOCASE.
+- Use single quotes for text values.
 - Return only the SQL query, with no explanation and no markdown.
-
-Examples (for a different schema: employees with name, department, salary):
-Request: average salary per department
-SQL: SELECT department, AVG(salary) AS avg_salary FROM employees GROUP BY department
-Request: اعرض اعلى 3 موظفين من حيث الراتب
-SQL: SELECT name, salary FROM employees ORDER BY salary DESC LIMIT 3
 
 Database schema:
 {schema}"""),
@@ -43,6 +38,7 @@ chain = prompt | llm | StrOutputParser()
 
 
 def clean_sql(text):
+    text = re.split(r"<\|", text)[0]
     match = re.search(r"```(?:sql)?\s*(.*?)```", text, re.DOTALL | re.IGNORECASE)
     if match:
         text = match.group(1)
@@ -52,6 +48,14 @@ def clean_sql(text):
     return text.strip().rstrip(";").strip()
 
 
-def generate_sql(question, schema):
-    output = chain.invoke({"question": question, "schema": schema})
+def generate_sql(question, schema, previous_sql=None, error=None):
+    request = question
+    if previous_sql and error:
+        request = (
+            question
+            + "\n\nThe previous query failed.\nQuery: " + previous_sql
+            + "\nError: " + str(error)
+            + "\nWrite a corrected query."
+        )
+    output = chain.invoke({"question": request, "schema": schema})
     return clean_sql(output)

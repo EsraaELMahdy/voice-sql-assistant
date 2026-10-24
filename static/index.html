@@ -22,6 +22,8 @@
   th, td { border: 1px solid #d9dee3; padding: 6px 10px; text-align: left; }
   th { background: #eef1f4; }
   .label { font-weight: 600; margin-top: 12px; }
+  ul { padding-left: 20px; }
+  a { color: #2563eb; }
 </style>
 </head>
 <body>
@@ -59,14 +61,24 @@
 
   <section id="out" hidden>
     <h2>3. Result</h2>
+    <div class="label">Answer from</div>
+    <div id="route"></div>
     <div class="label">What I heard</div>
     <div id="transcript" dir="auto"></div>
-    <div class="label">Generated SQL</div>
-    <pre id="sql"></pre>
+    <div id="sqlBlock">
+      <div class="label">Generated SQL</div>
+      <pre id="sql"></pre>
+    </div>
     <div class="label">Explanation</div>
     <div id="explanation" dir="auto"></div>
-    <div class="label">Data</div>
-    <div id="table"></div>
+    <div id="sourcesBlock" hidden>
+      <div class="label">Sources</div>
+      <ul id="sources"></ul>
+    </div>
+    <div id="dataBlock">
+      <div class="label">Data</div>
+      <div id="table"></div>
+    </div>
   </section>
 </main>
 
@@ -121,11 +133,23 @@ async function run(url, options) {
   }
 }
 
-function show(data) {
-  $('out').hidden = false;
-  $('transcript').textContent = data.transcript || data.question;
-  $('sql').textContent = data.sql;
-  $('explanation').textContent = data.explanation || '';
+function showSources(sources) {
+  const items = sources.map((source) => {
+    const li = document.createElement('li');
+    const link = document.createElement('a');
+    link.textContent = source.title || source.url;
+    if (/^https?:\/\//.test(source.url)) {
+      link.href = source.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+    }
+    li.appendChild(link);
+    return li;
+  });
+  $('sources').replaceChildren(...items);
+}
+
+function showTable(data) {
   const table = document.createElement('table');
   const head = table.insertRow();
   data.columns.forEach((name) => {
@@ -140,6 +164,23 @@ function show(data) {
     });
   });
   $('table').replaceChildren(table);
+}
+
+function show(data) {
+  const isWeb = data.route === 'web';
+  $('out').hidden = false;
+  $('route').textContent = isWeb ? 'The web' : 'Your data (SQL on SQLite)';
+  $('transcript').textContent = data.transcript || data.question;
+  $('explanation').textContent = data.explanation || '';
+  $('sqlBlock').hidden = isWeb;
+  $('dataBlock').hidden = isWeb;
+  $('sourcesBlock').hidden = !isWeb;
+  if (isWeb) { 
+    showSources(data.sources || []);
+    return;
+  }
+  $('sql').textContent = data.sql;
+  showTable(data);
 }
 
 $('rec').onclick = async () => {
